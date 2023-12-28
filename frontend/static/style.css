@@ -1,0 +1,12 @@
+/* static/style/css */
+
+body {
+    background-color: rgb(177, 152, 196);
+    font-family: sans-serif;
+    justify-content: center;
+}
+
+h1 {
+    color: black;
+}
+
