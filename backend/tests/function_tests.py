@@ -1,9 +1,13 @@
 import unittest
 import pandas as pd
 import pandas.testing as pd_testing
+import os
+import sys
+
+sys.path.append(os.path.dirname(sys.path[0]))
 
 # Importing functions
-from functions import get_dominant_font
+from app.functions import get_dominant_font
 
 class Testing(unittest.TestCase):
 
