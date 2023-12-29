@@ -79,18 +79,20 @@ def get_lines_details(page):
                                           'FontSColor' : [str(character.graphicstate.ncolor)]}
                       characters_details = pd.concat([characters_details, pd.DataFrame(character_details)])
 
-              # Dropping duplicates
-              characters_details = characters_details.drop_duplicates()
-              # Modifying fonts in case of not common exceptions
-              characters_details = get_dominant_font(characters_details)
+              # Making sure that any details were returned
+              if characters_details.shape[0] > 0:
 
-              # Appending line details to table
-              new_row = {'ElementText':[text_line.get_text().replace('\t','').replace('\n','')],
-                        'FontName':[str(set(characters_details['FontName'].values))],
-                        'FontSize':[str(set(characters_details['FontSize'].values))],
-                        'FontSColor':[str(set(characters_details['FontSColor'].values))]
-                        }
-              line_details = pd.concat([line_details, pd.DataFrame(new_row)], ignore_index=True)
+                # Dropping duplicates
+                characters_details = characters_details.drop_duplicates()
+                # Modifying fonts in case of not common exceptions
+                characters_details = get_dominant_font(characters_details)
+
+                # Appending line details to table
+                new_row = {'ElementText':[text_line.get_text().replace('\t','').replace('\n','')],
+                           'FontName':[str(set(characters_details['FontName'].values))],
+                           'FontSize': characters_details['FontSize'].values.mean(),
+                           'FontSColor':[str(set(characters_details['FontSColor'].values))]}
+                line_details = pd.concat([line_details, pd.DataFrame(new_row)], ignore_index=True)
 
   return line_details
 
@@ -116,7 +118,7 @@ def group_lines_into_page(line_details):
         (line_details.loc[i,'FontSize'] == line_details.loc[i-1,'FontSize']) &
         (line_details.loc[i,'FontSColor'] == line_details.loc[i-1,'FontSColor'])):
       # If row has the same parameters as previous row, we append text to previous row's text
-      page_details.iloc[-1]['ElementText'] = page_details.iloc[-1]['ElementText'] + ' ' + line_details.loc[i,'ElementText']
+      page_details.iloc[-1, 0] = page_details.iloc[-1, 0] + ' ' + line_details.loc[i,'ElementText']
     else:
       # If row has different parameters than previous row we just rewrite it
       page_details = pd.concat([page_details, line_details.loc[[i]]], ignore_index = True)
@@ -140,6 +142,8 @@ def get_page_number(page_details):
   """
 
   page_number = np.nan
+  # Index of row with page number
+  n = np.nan
 
   # Iterating over elements
   for i in range(int(page_details.shape[0]/2)):
@@ -148,16 +152,105 @@ def get_page_number(page_details):
     if page_details.iloc[-(i+1)]['FontSize'] == page_details.iloc[-1]['FontSize']:
       if str(page_details.iloc[-(i+1)]['ElementText']).rstrip().isnumeric():
         page_number = page_details.iloc[-(i+1)]['ElementText'].rstrip()
+        n = page_details.shape[0] - (i+1)
 
     # Verifying if page number exist in the header
     if page_details.iloc[i]['FontSize'] == page_details.iloc[0]['FontSize']:
       if str(page_details.iloc[i]['ElementText']).rstrip().isnumeric():
         page_number = page_details.iloc[i]['ElementText'].rstrip()
+        n = i
 
   # If page number was not found
   if page_number != None:
     page_details['PageNumber'] = page_number
     # Excluding element with page number from paragraphs
-    page_details = page_details[page_details.index != page_number]
+    page_details = page_details[page_details.index != n]
 
   return page_details
+
+def get_main_font_among_pages(all_pages):
+  """Function that establish paragraph font details based on occurence of every font details among chars
+  
+  Parameters
+  ----------
+  all_pages : list
+      List of tables with page details (columns 'FontName', 'FontSize', 'FontSColor')
+
+  Returns
+  -------
+  main_paragraph_font : dataframe
+      Table with main paragraph font details
+  """
+  # Contacting all pages
+  pages_text = pd.DataFrame()
+  for page_text in all_pages:
+      pages_text = pd.concat([pages_text, page_text], ignore_index = True)
+
+  # Making column with number of char in each element
+  pages_text['ElementTextLength'] = [len(el) for el in pages_text['ElementText']]
+
+  # Counting occurence of every font details among characters
+  style_occurance = pages_text.groupby(['FontName','FontSize','FontSColor'])['ElementTextLength'].sum()
+  style_occurance = style_occurance.reset_index().sort_values('ElementTextLength', ascending = False)
+
+  # Choosing most frequent font details as main paragraph details
+  main_paragraph_font = style_occurance.iloc[0]
+
+  return main_paragraph_font
+
+def get_footer_and_header(all_pages):
+  """Function that establish header and footer based on font size
+  
+  Parameters
+  ----------
+  all_pages : list
+      List of tables with page details (columns 'FontName', 'FontSize', 'FontSColor')
+
+  Returns
+  -------
+  all_pages : dataframe
+      List of tables with page details with additional columns 'Header', 'Footer'
+  """
+
+  # Getting main paragraph font details
+  main_paragraph_font = get_main_font_among_pages(all_pages)
+
+  # Iterating over pages
+  for pg in range(len(all_pages)):
+
+      page_details = all_pages[pg]
+
+      # Iterating over top n rows with font size smaller than main paragrapg font size
+      n = np.nan
+      for i in range(int(page_details.shape[0])):
+
+          if (page_details.iloc[i]['FontSize'] < (main_paragraph_font['FontSize'])): n = i
+          else: break
+      
+      # Checking if any row was classified as header
+      page_details['Header'] = np.nan
+      if n >= 0:
+          # Saving header value in column
+          page_details['Header'] = ' '.join(page_details.iloc[:n+1]['ElementText'].values)
+          # Limiting table to rows that are not header
+          page_details = page_details.iloc[n+1:].copy()
+
+      # Iterating over bottom n rows with font size smaller than main paragrapg font size
+      n = np.nan
+      for i in range(int(page_details.shape[0])):
+
+          if (page_details.iloc[-(i+1)]['FontSize'] < (main_paragraph_font['FontSize'])): n = i
+          else: break
+
+      # Checking if any row was classified as footer
+      page_details['Footer'] = np.nan
+      if n >= 0:
+          # Saving footer value in column
+          page_details['Footer'] = ' '.join(page_details.iloc[-(n+1):]['ElementText'].values)
+          # Limiting table to rows that are not footer
+          page_details = page_details.iloc[:-(n+1)].copy()
+
+      # Overwritting page table in list
+      all_pages[pg] = page_details
+
+  return all_pages
