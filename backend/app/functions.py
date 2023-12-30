@@ -2,30 +2,6 @@ import pandas as pd
 import numpy as np
 from pdfminer.layout import LTTextContainer, LTChar, LTTextLine
 
-def get_dominant_font(characters_details):
-  """Function that get font details for each character in line and return font that dominates if the font size of all characters is the same
-  
-  Parameters
-  ----------
-  characters_details : dataframe
-      Table with character details (columns 'FontName', 'FontSize', 'FontSColor') for each character in text line
-
-  Returns
-  -------
-  characters_details : dataframe
-      Table with character details (columns 'FontName', 'FontSize', 'FontSColor') where FontName was changed to most common font name, if font size is the same as most common font size
-  """
-
-  # Making sure that any character details are in table
-  if characters_details.shape[0] > 0:
-
-    # Getting most common character details
-    common_font, common_size, common_scolor = characters_details.value_counts().index[0]
-
-    # Overwritting font if size is the same as the rest of text
-    characters_details.loc[(characters_details['FontSize'] == common_size) & (characters_details['FontName'] != common_font), 'FontName'] = common_font
-
-  return characters_details
 
 def get_lines_details(page):
   """Function that iterate over each char in each line of each text element on page to establish font style of every line 
@@ -45,7 +21,7 @@ def get_lines_details(page):
   important_characters = (list(range(48, 57+1))+list(range(65, 90+1))+list(range(97, 122+1)))
 
   # Table for line's details 
-  line_details = pd.DataFrame()
+  lines_details = pd.DataFrame()
 
   # Iterating over text containers in page
   for element in page:
@@ -60,10 +36,16 @@ def get_lines_details(page):
             if isinstance(text_line, LTTextLine):
 
               # Table for character's details
-              characters_details = pd.DataFrame()
+              char_details = pd.DataFrame()
 
               # Iterating over every char in line container
               for character in text_line:
+
+                new_row = {'Char' : [character], 
+                           'FontName': [np.nan],
+                           'FontSize' : [np.nan],
+                           'FontSColor' : [np.nan]}
+                
                 if isinstance(character, LTChar):
                   
                   # Verifying if char has good length 
@@ -74,25 +56,56 @@ def get_lines_details(page):
                     if ord(character._text) in important_characters:
 
                       # Appending character details of char to table
-                      character_details = {'FontName':character.fontname,
-                                          'FontSize' : round(character.size,2),
-                                          'FontSColor' : [str(character.graphicstate.ncolor)]}
-                      characters_details = pd.concat([characters_details, pd.DataFrame(character_details)])
+                      new_row['FontName'] = character.fontname
+                      new_row['FontSize'] = round(character.size,2)
+                      new_row['FontSColor'] = str(character.graphicstate.ncolor)
+                      
+                char_details = pd.concat([char_details, pd.DataFrame(new_row)], ignore_index = True)
+                
+              # Grouping characters
+              char_details = char_details[~char_details['FontName'].isna()].reset_index().drop(columns='index')
+              line_details = group_characters_into_lines(char_details)
 
               # Making sure that any details were returned
-              if characters_details.shape[0] > 0:
-
-                # Dropping duplicates
-                characters_details = characters_details.drop_duplicates()
-                # Modifying fonts in case of not common exceptions
-                characters_details = get_dominant_font(characters_details)
+              if line_details.shape[0] > 0:
 
                 # Appending line details to table
-                new_row = {'ElementText':[text_line.get_text().replace('\t','').replace('\n','')],
-                           'FontName':[str(set(characters_details['FontName'].values))],
-                           'FontSize': characters_details['FontSize'].values.mean(),
-                           'FontSColor':[str(set(characters_details['FontSColor'].values))]}
-                line_details = pd.concat([line_details, pd.DataFrame(new_row)], ignore_index=True)
+                lines_details = pd.concat([lines_details, line_details], ignore_index=True)
+
+  return lines_details
+
+def group_characters_into_lines(char_details):
+  """Function that merge characters into lines if adjacent characters of text have the same style
+  
+  Parameters
+  ----------
+  char_details : dataframe
+      Table with character details (columns 'FontName', 'FontSize', 'FontSColor')
+
+  Returns
+  -------
+  line_details : dataframe
+      Table with line details (columns 'FontName', 'FontSize', 'FontSColor')
+  """
+  # Converting chars to text
+  char_details['ElementText'] = [x.get_text() for x in char_details['Char']]
+  char_details = char_details[['ElementText', 'FontName', 'FontSize', 'FontSColor']].copy()
+  # Forward fill for chars that do not have font details
+  for col in ['FontName','FontSize', 'FontSColor']:
+    char_details[col] = char_details[col].ffill()
+
+  # We start section grouping from the first element
+  line_details = char_details.loc[[0]].copy()
+
+  for i in range(1, char_details.shape[0]):
+    if ((char_details.loc[i,'FontName'] == char_details.loc[i-1,'FontName']) &
+        (char_details.loc[i,'FontSize'] == char_details.loc[i-1,'FontSize']) &
+        (char_details.loc[i,'FontSColor'] == char_details.loc[i-1,'FontSColor'])):
+      # If row has the same parameters as previous row, we append text to previous row's text
+      line_details.iloc[-1, 0] = line_details.iloc[-1, 0] + char_details.loc[i, 'ElementText']
+    else:
+      # If row has different parameters than previous row we just rewrite it
+      line_details = pd.concat([line_details, char_details.loc[[i]]], ignore_index = True)
 
   return line_details
 

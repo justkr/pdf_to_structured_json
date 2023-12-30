@@ -48,10 +48,16 @@ class Testing(unittest.TestCase):
         chars_details['FontSize'] = [1] * 4 + [2] + [1] * 5
         chars_details['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
 
-        # Applying function - nothing should be changed
+        # Applying function
         chars_details = get_dominant_font(chars_details)
 
-        self.assertEqual(chars_details, chars_details)
+        # Table that we want to get
+        chars_details_correct = pd.DataFrame()
+        chars_details_correct['FontName'] = ['Font1'] * 10
+        chars_details_correct['FontSize'] = [1] * 10
+        chars_details_correct['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
+
+        self.assertEqual(chars_details, chars_details_correct)
 
     def test_get_dominant_font_empty_table(self):
 
@@ -65,7 +71,7 @@ class Testing(unittest.TestCase):
 
     def test_get_dominant_font_same_font_diff_size(self):
 
-        # Table with the same font but different size - - nothing should be changed
+        # Table with the same font but different size
         chars_details = pd.DataFrame()
         chars_details['FontName'] = ['Font1'] * 10
         chars_details['FontSize'] = [1] * 4 + [2] + [1] * 5
@@ -74,7 +80,13 @@ class Testing(unittest.TestCase):
         # Applying function - nothing should be changed
         chars_details = get_dominant_font(chars_details)
 
-        self.assertEqual(chars_details, chars_details)
+        # Table that we want to get
+        chars_details_correct = pd.DataFrame()
+        chars_details_correct['FontName'] = ['Font1'] * 10
+        chars_details_correct['FontSize'] = [1] * 10
+        chars_details_correct['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
+
+        self.assertEqual(chars_details, chars_details_correct)
 
 if __name__ == '__main__':
 
