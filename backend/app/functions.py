@@ -142,49 +142,6 @@ def group_lines_into_page(line_details):
 
   return page_details
 
-def get_page_number(page_details):
-  """Function that try to find page number based on elements on page.
-     Numeric element is searched among bottom and top elements with common fontsize.
-  
-  Parameters
-  ----------
-  page_details : dataframe
-      Table with page details (columns 'FontName', 'FontSize', 'FontSColor')
-
-  Returns
-  -------
-  page_details : dataframe
-      Table with page details and with additional column 'PageNumber' if page number was found. 
-      Also with deleted element with page number.
-  """
-
-  page_number = np.nan
-  # Index of row with page number
-  n = np.nan
-
-  # Iterating over elements
-  for i in range(int(page_details.shape[0]/2)):
-
-    # Verifying if page number exist in the footer
-    if page_details.iloc[-(i+1)]['FontSize'] == page_details.iloc[-1]['FontSize']:
-      if str(page_details.iloc[-(i+1)]['ElementText']).rstrip().isnumeric():
-        page_number = page_details.iloc[-(i+1)]['ElementText'].rstrip()
-        n = page_details.shape[0] - (i+1)
-
-    # Verifying if page number exist in the header
-    if page_details.iloc[i]['FontSize'] == page_details.iloc[0]['FontSize']:
-      if str(page_details.iloc[i]['ElementText']).rstrip().isnumeric():
-        page_number = page_details.iloc[i]['ElementText'].rstrip()
-        n = i
-
-  # If page number was not found
-  if page_number != None:
-    page_details['PageNumber'] = page_number
-    # Excluding element with page number from paragraphs
-    page_details = page_details[page_details.index != n]
-
-  return page_details
-
 def get_main_font_among_pages(all_pages):
   """Function that establish paragraph font details based on occurence of every font details among chars
   
@@ -216,7 +173,7 @@ def get_main_font_among_pages(all_pages):
   return main_paragraph_font
 
 def get_footer_and_header(all_pages):
-  """Function that establish header and footer based on font size
+  """Function that establish header and footer based on font size. It also search for page number in footer/header and return page number as column 'PageNumber'
   
   Parameters
   ----------
@@ -225,8 +182,8 @@ def get_footer_and_header(all_pages):
 
   Returns
   -------
-  all_pages : dataframe
-      List of tables with page details with additional columns 'Header', 'Footer'
+  all_pages_modified : dataframe
+      List of tables with page details with additional columns 'Header', 'Footer' and 'PageNumber'
   """
 
   # Getting main paragraph font details
@@ -270,4 +227,102 @@ def get_footer_and_header(all_pages):
       # Overwritting page table in list
       all_pages[pg] = page_details
 
-  return all_pages
+  # Joining pages together
+  pages_text = pd.DataFrame()
+  for page_text in all_pages:
+      pages_text = pd.concat([pages_text, page_text], ignore_index = True)
+
+  # Preparing joined pages for page number search
+  pages_text['PageNumber'] = None
+  pages_text['Header'] = pages_text['Header'].astype(str)
+  pages_text['Footer'] = pages_text['Footer'].astype(str)
+  pages_text = pages_text[['ElementText', 'FontName', 'FontSize', 'FontSColor',
+                          'OperationalPageNumber', 'Header', 'Footer', 'PageNumber']].copy()
+
+  # Iterating over elements to see if there are any numbers in footer and header
+  for i, row in pages_text.iterrows():
+      numbersh = [str(x) for x in row['Header'] if str(x).isdigit()]
+      numbersf = [str(x) for x in row['Footer'] if str(x).isdigit()]
+      if len(numbersh + numbersf) > 0: pages_text.loc[i, 'PageNumber'] = ''.join(numbersh + numbersf)
+
+  # Calculating difference between found numbers and operational page number
+  pages_text['PageDifference'] = [int(po) - int(p) if p != None else None for po, p in zip(pages_text['OperationalPageNumber'],pages_text['PageNumber'])]
+
+  # At lease 50% of pages have to have page number filled, otherwise PageNumber will not be filled
+  na_fillout = pages_text['PageDifference'].isna().sum() / pages_text['PageDifference'].shape[0]
+  if na_fillout <= 0.5:
+    # Most common difference (to make sure that some deviations do not impact page number)
+    difference_pages = pages_text['PageDifference'].value_counts().index[0]
+    # Calculating PageNumber
+    pages_text['PageNumber'] = pages_text['OperationalPageNumber'] - difference_pages
+    pages_text.loc[pages_text['PageNumber'] <=0, 'PageNumber'] = np.nan
+     
+  # Pages modification - adding PageNumber
+  all_pages_modified = []
+  for i in range(len(all_pages)):
+      pg = all_pages[i]
+      pg = pg.merge(pages_text[['OperationalPageNumber', 'PageNumber']].drop_duplicates(), on = ['OperationalPageNumber'], how='left')
+      all_pages_modified.append(pg)
+
+  return all_pages_modified
+
+def get_structure(all_pages):
+  """Function that establish if element is 'Header' or 'Text
+  
+  Parameters
+  ----------
+  all_pages : list
+      List of tables with page details (columns 'FontName', 'FontSize', 'FontSColor')
+
+  Returns
+  -------
+  all_pages_modified : dataframe
+      List of tables with page details with additional column 'Structure'
+  """
+
+  # Joining all pages together to findout style of sections in the whole document
+  pages_text = pd.DataFrame()
+  for page_text in all_pages:
+      pages_text = pd.concat([pages_text, page_text], ignore_index = True)
+
+  # Determining what style occures the most often in document
+  main_paragraph_font = get_main_font_among_pages(all_pages)
+
+  # Calculating proportion of every style occurance
+  pages_text['ElementTextLength'] = [len(x) for x in pages_text['ElementText']]
+  style = pages_text.groupby(['FontName', 'FontSize', 'FontSColor'])['ElementTextLength'].sum().reset_index()
+  style['ElementTextLength'] = style['ElementTextLength'] / pages_text['ElementTextLength'].sum()
+
+  # Element that are long are usually not headers, so they have the structure 'Text' assigned
+  long_texts = pages_text[pages_text['ElementTextLength'] > 100][['FontName', 'FontSize', 'FontSColor']].drop_duplicates()
+  long_texts['Structure'] = 'Text'
+  style = style.merge(long_texts, on = ['FontName', 'FontSize', 'FontSColor'], how = 'left').drop_duplicates()
+  style = style.sort_values('ElementTextLength', ascending=False)
+
+  # Not frequent elements are converted to standard text
+  style.loc[style['ElementTextLength'] <= 0.001, 'Structure'] = 'Text'
+
+  # Determining if font is bolded or have different color than standard text
+  style['Bold'] = [1 if ('bold' in nm.lower() and 'semibold' not in nm.lower()) else 0 for nm in style['FontName']]
+  style['Colored']= [1 if c != main_paragraph_font['FontSColor'] else 0 for c in style['FontSColor']]
+
+  # If element is not bolded and size is around main size, we assume that structure is 'Text'
+  style.loc[(abs(style['FontSize'] -  main_paragraph_font['FontSize']) <= 1) &
+            (style['Bold'] == 0), 'Structure'] = 'Text'
+
+  # If font size is smaller than main font and text is not bolded or colored, we assign it as 'Text'
+  style.loc[(style['FontSize'] < main_paragraph_font['FontSize']) &
+            (style['Bold'] == 0) & (style['Colored'] == 0), 'Structure'] = 'Text'
+
+  # All the other styles have 'Header' structure
+  style.loc[style['Structure'] != 'Text', 'Structure'] = 'Header'
+
+  # Merging style details (col 'Structure') to list of page details
+  all_pages_modified = []
+
+  for i in range(len(all_pages)):
+      pg = all_pages[i]
+      pg = pg.merge(style[['FontName','FontSize','FontSColor','Structure']], on = ['FontName','FontSize','FontSColor'], how='left')
+      all_pages_modified.append(pg)
+        
+  return all_pages_modified
