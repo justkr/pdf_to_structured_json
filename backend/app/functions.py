@@ -62,12 +62,15 @@ def get_lines_details(page):
                       
                 char_details = pd.concat([char_details, pd.DataFrame(new_row)], ignore_index = True)
                 
-              # Grouping characters
-              char_details = char_details[~char_details['FontName'].isna()].reset_index().drop(columns='index')
-              line_details = group_characters_into_lines(char_details)
 
               # Making sure that any details were returned
-              if line_details.shape[0] > 0:
+              if char_details.shape[0] > 0:
+
+                # Grouping characters
+                line_details = group_characters_into_lines(char_details)
+                line_details = line_details[~line_details['FontName'].isna()].reset_index().drop(columns='index')
+                line_details['ElementText'] = line_details['ElementText'].str.rstrip()
+                line_details['ElementText'] = [repr(x)[1:-1].replace('\\x','').replace('\\t','').replace('\\n','') for x in line_details['ElementText'] ]
 
                 # Appending line details to table
                 lines_details = pd.concat([lines_details, line_details], ignore_index=True)
@@ -125,6 +128,7 @@ def group_lines_into_page(line_details):
 
   # We start section grouping from the first element
   page_details = line_details.loc[[0]].copy()
+  line_details['ElementText'] = line_details['ElementText']
 
   for i in range(1, line_details.shape[0]):
     if ((line_details.loc[i,'FontName'] == line_details.loc[i-1,'FontName']) &
@@ -205,7 +209,7 @@ def get_main_font_among_pages(all_pages):
   # Counting occurence of every font details among characters
   style_occurance = pages_text.groupby(['FontName','FontSize','FontSColor'])['ElementTextLength'].sum()
   style_occurance = style_occurance.reset_index().sort_values('ElementTextLength', ascending = False)
-
+  style_occurance = style_occurance.drop(columns=['ElementTextLength'])
   # Choosing most frequent font details as main paragraph details
   main_paragraph_font = style_occurance.iloc[0]
 
