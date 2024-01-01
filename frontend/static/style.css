@@ -10,3 +10,9 @@ h1 {
     color: black;
 }
 
+pre {
+    width: 1200px;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+

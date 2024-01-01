@@ -16,7 +16,9 @@ def hello(request: Request, pdf_name : str = 'Factsheet Leben Risiko'):
 
     list_of_pargraphs = pdf_to_structured_json('./data/input', pdf_name)
 
-    with open(f'data/output/{pdf_name}.json', 'w') as f:
+    with open(f'data/output/file.json', 'w') as f:
         json.dump(list_of_pargraphs, f)
 
-    return templates.TemplateResponse('index.html', {'request' : request, 'pdf_jsoned' : list_of_pargraphs})
+    list_of_pargraphs_jsoned = json.dumps(list_of_pargraphs)
+
+    return templates.TemplateResponse('index.html', {'request' : request, 'pdf_jsoned' : list_of_pargraphs_jsoned})

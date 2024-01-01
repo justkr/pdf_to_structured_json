@@ -8,7 +8,9 @@
     <link rel="icon" type="image/x-icon" href="static/favicon.ico">
 </head>
 <body>
-    <h1>PDF output:</h1>
-    <p>{{ pdf_jsoned }}!</p>
+    <h1>PDF converted to structured JSON:</h1>
+    <script>var structured_json = "{{ pdf_jsoned }}";</script>
+    <pre id="jsonOutput"></pre>
+    <script src="/static/script.js"></script>
 </body>
 </html>
