@@ -128,7 +128,6 @@ def group_lines_into_page(line_details):
 
   # We start section grouping from the first element
   page_details = line_details.loc[[0]].copy()
-  line_details['ElementText'] = line_details['ElementText']
 
   for i in range(1, line_details.shape[0]):
     if ((line_details.loc[i,'FontName'] == line_details.loc[i-1,'FontName']) &
@@ -201,9 +200,9 @@ def get_footer_and_header(all_pages):
           if (page_details.iloc[i]['FontSize'] < (main_paragraph_font['FontSize'])): n = i
           else: break
       
-      # Checking if any row was classified as header
+      # Checking if any row was classified as header and if all rows do not met condition for header
       page_details['Header'] = np.nan
-      if n >= 0:
+      if n >= 0 and page_details[page_details['FontSize'] < main_paragraph_font['FontSize']].shape[0] < page_details.shape[0]:
           # Saving header value in column
           page_details['Header'] = ' '.join(page_details.iloc[:n+1]['ElementText'].values)
           # Limiting table to rows that are not header
@@ -216,9 +215,9 @@ def get_footer_and_header(all_pages):
           if (page_details.iloc[-(i+1)]['FontSize'] < (main_paragraph_font['FontSize'])): n = i
           else: break
 
-      # Checking if any row was classified as footer
+      # Checking if any row was classified as footer and if all rows do not met condition for footer
       page_details['Footer'] = np.nan
-      if n >= 0:
+      if n >= 0 and page_details[page_details['FontSize'] < main_paragraph_font['FontSize']].shape[0] < page_details.shape[0]:
           # Saving footer value in column
           page_details['Footer'] = ' '.join(page_details.iloc[-(n+1):]['ElementText'].values)
           # Limiting table to rows that are not footer
@@ -326,3 +325,109 @@ def get_structure(all_pages):
       all_pages_modified.append(pg)
         
   return all_pages_modified
+
+
+def group_structure(all_pages):
+  """Function that groups elements based on 'Structure' columns. Texts and other information columns are merged together.
+  
+  Parameters
+  ----------
+  all_pages : list
+      List of tables with page details (columns 'ElementText', 'OperationalPageNumber', 'PageNumber','Footer', 'Header')
+
+  Returns
+  -------
+  grouped_structure : dataframe
+      Table with all elements grouped by structure
+  """
+  # Joining all pages together to findout style of sections in the whole document
+  pages_text = pd.DataFrame()
+  for page_text in all_pages:
+    pages_text = pd.concat([pages_text, page_text], ignore_index = True)
+
+  # Data cleaning before transformations
+  for col in ['OperationalPageNumber', 'PageNumber']:
+    pages_text[col] = [round(float(x)) if x != '' else '' for x in pages_text[col].fillna('')]
+  for col in ['Footer', 'Header']:
+    pages_text[col] = [str(x).replace(str(round(float(y))), '').strip() if y!= '' else x for x, y in zip(pages_text[col].fillna(''), pages_text['PageNumber'].fillna(''))]
+
+  # We start structure grouping from the first element
+  grouped_structure = pages_text.loc[[0]].copy()
+
+  # Iterating over elements
+  for i in range(1, pages_text.shape[0]):
+
+    # If previous section was text - texts are merged
+    if ((pages_text.loc[i-1,'Structure']  == 'Text') & (pages_text.loc[i,'Structure']  == 'Text')):
+
+      # Merging elements
+      grouped_structure.iloc[-1, 0] = grouped_structure.iloc[-1, 0] + ' ' + pages_text.loc[i,'ElementText']
+
+      # If elements from different pages were merged, their details also
+      for col in ['OperationalPageNumber', 'PageNumber','Footer', 'Header']:
+        col_idx = list(pages_text.columns).index(col)
+        if str(pages_text.loc[i,col]) not in str(grouped_structure.iloc[-1, col_idx]): 
+          grouped_structure.iloc[-1, col_idx] = str(grouped_structure.iloc[-1, col_idx]) + ', ' + str(pages_text.loc[i,col])
+    
+    # If previous section was not text - text is appended
+    else:
+      grouped_structure = pd.concat([grouped_structure, pages_text.loc[[i]]], ignore_index = True)
+
+  return grouped_structure
+
+def table_to_structured_json(grouped_structure, pdf_name):
+  """Function that transform table with headers and texts to structured dictionary
+  
+  Parameters
+  ----------
+  grouped_structure : dataframe
+      Table with all elements grouped by structure
+  pdf_name : str
+      Name of document
+
+  Returns
+  -------
+  list_of_pargraphs : list
+      List of dictionaries with structured text
+  """
+
+  # List with all sections as dictionaries and with titles
+  list_of_pargraphs, titles= [], []
+
+  # Selecting headers from structure
+  headers = grouped_structure[grouped_structure['Structure'] == 'Header']
+
+  # Iterating over headers
+  for i, row in headers.iterrows():
+      
+      # Selecting previous headers
+      previous_headers = headers[headers.index < i]
+      if previous_headers.shape[0] > 0:
+        # If previous headers exists, checking if their font is bigger, keeping only the last header if multiple headers with the same size exists
+        df_hdrs = previous_headers[previous_headers['FontSize'] - 0.5 > row['FontSize']].drop_duplicates('FontSize', keep = 'last')
+        # Saving previous titles
+        titles = list(df_hdrs['ElementText'].values)
+
+      # Addinf current title to previous titles
+      titles.append(row['ElementText'])
+
+      # If header is followed by not empty text element, we append titles to list 
+      if i!= headers.index.max():
+        if grouped_structure.loc[i+1, 'Structure'] == 'Text':
+          if len(grouped_structure.loc[i+1, 'ElementText']) > 0:
+
+            # Preparing paragraph values
+            paragraph = {'FileName' : pdf_name,
+                         'Title' : ' -> '.join([x for x in titles if x != '']),
+                         'Text' : grouped_structure.loc[i+1, 'ElementText'],
+                         'OperationalPageNumber' : grouped_structure.loc[i+1, 'OperationalPageNumber'],
+                         'PageNumber' : grouped_structure.loc[i+1, 'PageNumber'],
+                         'Header' : grouped_structure.loc[i+1, 'Header'], 
+                         'Footer' : grouped_structure.loc[i+1, 'Footer'], 
+                        }
+                  
+            # Appending important paragraphs
+            ## Only items with non empty value are appended or important columns evan if their value is empty
+            list_of_pargraphs.append({k:v for k, v in paragraph.items() if v != '' or k in ['FileName','Title','Text']})
+
+  return list_of_pargraphs
