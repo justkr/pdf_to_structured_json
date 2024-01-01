@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from pdfminer.layout import LTTextContainer, LTChar, LTTextLine
-
+from pdfminer.high_level import extract_pages
 
 def get_lines_details(page):
   """Function that iterate over each char in each line of each text element on page to establish font style of every line 
@@ -112,7 +112,7 @@ def group_characters_into_lines(char_details):
 
   return line_details
 
-def group_lines_into_page(line_details):
+def group_lines_into_page(all_pages):
   """Function that merge lines into elements if adjacent lines of text have the same style
   
   Parameters
@@ -125,21 +125,27 @@ def group_lines_into_page(line_details):
   page_details : dataframe
       Table with page details (columns 'FontName', 'FontSize', 'FontSColor')
   """
+  all_pages_modified = []
 
-  # We start section grouping from the first element
-  page_details = line_details.loc[[0]].copy()
+  # Iterating over pages
+  for line_details in all_pages:
 
-  for i in range(1, line_details.shape[0]):
-    if ((line_details.loc[i,'FontName'] == line_details.loc[i-1,'FontName']) &
-        (line_details.loc[i,'FontSize'] == line_details.loc[i-1,'FontSize']) &
-        (line_details.loc[i,'FontSColor'] == line_details.loc[i-1,'FontSColor'])):
-      # If row has the same parameters as previous row, we append text to previous row's text
-      page_details.iloc[-1, 0] = page_details.iloc[-1, 0] + ' ' + line_details.loc[i,'ElementText']
-    else:
-      # If row has different parameters than previous row we just rewrite it
-      page_details = pd.concat([page_details, line_details.loc[[i]]], ignore_index = True)
+    # We start section grouping from the first element
+    page_details = line_details.loc[[0]].copy()
 
-  return page_details
+    for i in range(1, line_details.shape[0]):
+      if ((line_details.loc[i,'FontName'] == line_details.loc[i-1,'FontName']) &
+          (line_details.loc[i,'FontSize'] == line_details.loc[i-1,'FontSize']) &
+          (line_details.loc[i,'FontSColor'] == line_details.loc[i-1,'FontSColor'])):
+        # If row has the same parameters as previous row, we append text to previous row's text
+        page_details.iloc[-1, 0] = page_details.iloc[-1, 0] + ' ' + line_details.loc[i,'ElementText']
+      else:
+        # If row has different parameters than previous row we just rewrite it
+        page_details = pd.concat([page_details, line_details.loc[[i]]], ignore_index = True)
+    
+    all_pages_modified.append(page_details)
+
+  return all_pages_modified
 
 def get_main_font_among_pages(all_pages):
   """Function that establish paragraph font details based on occurence of every font details among chars
@@ -429,5 +435,58 @@ def table_to_structured_json(grouped_structure, pdf_name):
             # Appending important paragraphs
             ## Only items with non empty value are appended or important columns evan if their value is empty
             list_of_pargraphs.append({k:v for k, v in paragraph.items() if v != '' or k in ['FileName','Title','Text']})
+
+  return list_of_pargraphs
+
+def pdf_to_structured_json(pdf_path, pdf_name):
+  """Function that transform pdf into structured list of sections
+  
+  Parameters
+  ----------
+  pdf_path : str
+      Path to pdf file
+  pdf_name : str
+      File name
+
+  Returns
+  -------
+  list_of_pargraphs : list
+      List of dictionaries with structured text
+  """
+
+  # Extracting elements from pdf file
+  pages = extract_pages(f'{pdf_path}/{pdf_name}.pdf')
+  # Converting them to list
+  lst_pages = list(pages)
+
+  # List of modified 
+  df_lines_text = []
+
+  # Page number in pdf readed
+  operational_page_number = 0
+
+  # Iterating over pages
+  for page in lst_pages: 
+
+      # Getting line details
+      lines = get_lines_details(page)
+
+      # Adding columns with page number in pdf reade
+      operational_page_number = operational_page_number + 1
+      lines['OperationalPageNumber'] = operational_page_number
+
+      # Appending modified page
+      df_lines_text.append(lines)
+
+  # Grouping lines into pages
+  df_pages_text = group_lines_into_page(df_lines_text)
+  # Identification of footer, header and page number in document
+  df_pages_text_fh = get_footer_and_header(df_pages_text)
+  # Determining if text element is header or text
+  df_pages_text_s = get_structure(df_pages_text_fh)
+  # Grouping texts together
+  df_pages_text_structured = group_structure(df_pages_text_s)
+  # Transforming table to list of sections in form of dictionary
+  list_of_pargraphs = table_to_structured_json(df_pages_text_structured, pdf_name)
 
   return list_of_pargraphs
