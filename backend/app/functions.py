@@ -455,7 +455,7 @@ def pdf_to_structured_json(pdf_path, pdf_name):
   """
 
   # Extracting elements from pdf file
-  pages = extract_pages(f'{pdf_path}/{pdf_name}.pdf')
+  pages = extract_pages(f'{pdf_path}/{pdf_name}')
   # Converting them to list
   lst_pages = list(pages)
 
@@ -487,6 +487,6 @@ def pdf_to_structured_json(pdf_path, pdf_name):
   # Grouping texts together
   df_pages_text_structured = group_structure(df_pages_text_s)
   # Transforming table to list of sections in form of dictionary
-  list_of_pargraphs = table_to_structured_json(df_pages_text_structured, pdf_name)
+  list_of_pargraphs = table_to_structured_json(df_pages_text_structured, pdf_name.split('.pdf')[0])
 
   return list_of_pargraphs

@@ -8,9 +8,9 @@
     <link rel="icon" type="image/x-icon" href="static/favicon.ico">
 </head>
 <body>
-    <form action="/upload/" method="post" enctype="multipart/form-data">
-        <input type="file" name="pdf_name" />
-        <button type="submit">Upload</button>
-    </form>
+    <h1>PDF converted to structured JSON:</h1>
+    <script>var structured_json = "{{ pdf_jsoned }}";</script>
+    <pre id="jsonOutput"></pre>
+    <script src="/static/script.js"></script>
 </body>
 </html>
