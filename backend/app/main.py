@@ -14,12 +14,12 @@ templates = Jinja2Templates(directory = './frontend/templates')
 app.mount('/static', StaticFiles(directory = './frontend/static'), name = 'static')
 
 UPLOAD_DIR = Path() / 'data/input'
-@app.post('/upload/')
+@app.post('/')
 async def upload_file(request: Request, pdf_name: UploadFile):
 
 
     data = await pdf_name.read()
-    
+
     with open(f"data/input/{pdf_name.filename}", 'wb') as f:
         f.write(data)
 
@@ -33,7 +33,7 @@ async def upload_file(request: Request, pdf_name: UploadFile):
     return templates.TemplateResponse("result.html", {'request' : request, 'filename': pdf_name.filename, 'pdf_jsoned' : list_of_pargraphs_jsoned})
 
 
-@app.get("/upload/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def read_upload(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
