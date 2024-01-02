@@ -17,3 +17,53 @@ pre {
     overflow-x: auto;
 }
 
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    text-align: center;
+}
+
+
+button[type="submit"] {
+    display: block;
+    font-size: small;
+    background-color: white;
+    color: black;
+    padding: 10px 20px;
+    border: 1px solid black;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+button[type="submit"]:hover {
+    background-color: white;
+}
+
+input[type="file"] {
+    display: none; /* Hide the default file input */
+}
+
+label.choose-file-btn {
+
+    display: inline-block;
+    font-size: small;
+    background-color: white;
+    color: black;
+    padding: 10px 20px;
+    border: 1px solid black;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+label.choose-file-btn:hover {
+    background-color: white;
+}

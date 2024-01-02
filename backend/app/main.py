@@ -23,7 +23,7 @@ async def upload_file(request: Request, pdf_name: UploadFile):
     with open(f"data/input/{pdf_name.filename}", 'wb') as f:
         f.write(data)
 
-    list_of_pargraphs = pdf_to_structured_json('./data/input', pdf_name.filename)
+    list_of_pargraphs = pdf_to_structured_json('data/input', pdf_name.filename)
 
     with open(f"data/output/{pdf_name.filename.split('.pdf')[0]}.json", 'w') as f:
         json.dump(list_of_pargraphs, f)
