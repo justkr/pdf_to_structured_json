@@ -1,9 +1,13 @@
 import unittest
 import pandas as pd
 import pandas.testing as pd_testing
+import os
+import sys
+
+sys.path.append(os.path.dirname(sys.path[0]))
 
 # Importing functions
-from functions import get_dominant_font
+from app.functions import get_main_font_among_pages, group_lines_into_page
 
 class Testing(unittest.TestCase):
 
@@ -17,60 +21,39 @@ class Testing(unittest.TestCase):
     def setUp(self):
         self.addTypeEqualityFunc(pd.DataFrame, self.assertDataframeEqual)
 
-    def test_get_dominant_font_diff_font_same_size(self):
+    def test_get_main_font_among_pages(self):
 
-        # Table with one font different than other but with the same size as other
-        chars_details = pd.DataFrame()
-        chars_details['FontName'] = ['Font1','Font1','Font1','Font1','Font1','Font1bold','Font1','Font1','Font1','Font1']
-        chars_details['FontSize'] = [1] * 10
-        chars_details['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
+        # Table with details
+        fonts = pd.DataFrame()
+        fonts['FontName'] = ['A', 'B', 'B', 'A', 'C', 'B']
+        fonts['FontSize'] = [1, 2, 3, 1, 4, 2]
+        fonts['FontSColor'] = ['a', 'a', 'a', 'a', 'c', 'a']
+        fonts['ElementText'] = ['ertg', 'sedrtgfhyjnbvd', 'ertghgb', 'drf', 'c', 'wesddfghtr']
 
         # Applying function
-        chars_details = get_dominant_font(chars_details)
+        func_main_font = get_main_font_among_pages([fonts, fonts, fonts])
 
-        # Table that we want to get
-        chars_details_correct = pd.DataFrame()
-        chars_details_correct['FontName'] = ['Font1'] * 10
-        chars_details_correct['FontSize'] = [1] * 10
-        chars_details_correct['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
+        self.assertEqual(func_main_font['FontName'], 'B')
+        self.assertEqual(func_main_font['FontSize'], 2)
+        self.assertEqual(func_main_font['FontSColor'], 'a')
 
-        self.assertEqual(chars_details, chars_details_correct)
+    def test_group_lines_into_page(self):
 
-    def test_get_dominant_font_diff_font_diff_size(self):
+        line_details = pd.DataFrame()
+        line_details['ElementText'] = ['A', 'B', 'C', 'a', 'b', 'c']
+        line_details['FontName'] = ['A1', 'A1', 'A1', 'A2', 'A2', 'A2']
+        line_details['FontSize'] = [1, 1, 1, 2, 2, 2]
+        line_details['FontSColor'] = ['a', 'a', 'a', 'b', 'b', 'b']
 
-        # Table with one font and size different than other
-        chars_details = pd.DataFrame()
-        chars_details['FontName'] = ['Font1','Font1','Font1','Font1','Font1','Font1bold','Font1','Font1','Font1','Font1']
-        chars_details['FontSize'] = [1] * 4 + [2] + [1] * 5
-        chars_details['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
+        page_details_test = group_lines_into_page(line_details)
 
-        # Applying function - nothing should be changed
-        chars_details = get_dominant_font(chars_details)
+        page_details = pd.DataFrame()
+        page_details['ElementText'] = ['A B C', 'a b c']
+        page_details['FontName'] = ['A1', 'A2']
+        page_details['FontSize'] = [1, 2]
+        page_details['FontSColor'] = ['a', 'b']
 
-        self.assertEqual(chars_details, chars_details)
-
-    def test_get_dominant_font_empty_table(self):
-
-        # Empty table with nothing to change
-        chars_details = pd.DataFrame()
-
-        # Applying function - nothing should be changed
-        chars_details = get_dominant_font(chars_details)
-
-        self.assertEqual(chars_details, chars_details)
-
-    def test_get_dominant_font_same_font_diff_size(self):
-
-        # Table with the same font but different size - - nothing should be changed
-        chars_details = pd.DataFrame()
-        chars_details['FontName'] = ['Font1'] * 10
-        chars_details['FontSize'] = [1] * 4 + [2] + [1] * 5
-        chars_details['FontSColor'] = ['(0, 0, 0, 0.6)'] * 10
-
-        # Applying function - nothing should be changed
-        chars_details = get_dominant_font(chars_details)
-
-        self.assertEqual(chars_details, chars_details)
+        self.assertEqual(page_details_test, page_details)
 
 if __name__ == '__main__':
 

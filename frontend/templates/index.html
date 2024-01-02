@@ -8,7 +8,25 @@
     <link rel="icon" type="image/x-icon" href="static/favicon.ico">
 </head>
 <body>
-    <h1>PDF output:</h1>
-    <p>{{ pdf_jsoned }}!</p>
+    <style>
+        h1 {
+            text-align: center;
+            margin-top: 40px;
+        }
+    </style>
+    <h1>PDF converted to structured JSON:</h1>
+    <form action="/" method="post" enctype="multipart/form-data">
+        <label class="choose-file-btn">Choose File
+            <input type="file" name="pdf_name" id="pdfInput" accept="*.pdf" onchange="displayFileName(this)"/>
+        </label>
+        <span id="fileLabel" class="file-label">No file selected</span>
+        <button type="submit">Upload PDF</button>
+    </form>
+    <script>
+        function displayFileName(input) {
+            var fileName = input.files[0].name;
+            document.getElementById('fileLabel').textContent = fileName;
+        }
+    </script>
 </body>
 </html>

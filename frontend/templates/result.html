@@ -1,0 +1,16 @@
+<!-- templates/result.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>PDF to structured JSON converter</title>
+    <link rel="stylesheet", href="{{ url_for('static', path='style.css') }}">
+    <link rel="icon" type="image/x-icon" href="static/favicon.ico">
+</head>
+<body>
+    <h1>PDF converted to structured JSON:</h1>
+    <script>var structured_json = "{{ pdf_jsoned }}";</script>
+    <pre id="jsonOutput"></pre>
+    <script src="/static/script.js"></script>
+</body>
+</html>
